@@ -3,7 +3,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import urlparse
 
 from core.logger import get_logger
-from core.exceptions import ValidationError, DuplicateSignalError
+from core.exceptions import ValidationError, DuplicateSignalError, IntegrityError
 from core.config import CFG
 from veritas.storage import Storage
 from veritas.ingestion import IngestionEngine
@@ -101,6 +101,10 @@ class VeritasHandler(BaseHTTPRequestHandler):
                 self.server.feed.insert(0, {"status": "rejected", "reason": "Invalid JSON format", "payload": {}})
                 self._send_response(400, {"error": "Invalid JSON format"})
             except ValidationError as e:
+                self.server.stats["malformed"] += 1
+                self.server.feed.insert(0, {"status": "rejected", "reason": str(e), "payload": feed_payload if 'feed_payload' in locals() else {}})
+                self._send_response(400, {"error": str(e)})
+            except IntegrityError as e:
                 self.server.stats["malformed"] += 1
                 self.server.feed.insert(0, {"status": "rejected", "reason": str(e), "payload": feed_payload if 'feed_payload' in locals() else {}})
                 self._send_response(400, {"error": str(e)})
