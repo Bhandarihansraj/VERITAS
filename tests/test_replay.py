@@ -4,25 +4,31 @@ import replay
 from veritas.storage import Storage
 from veritas.resolver import ConflictResolver
 from veritas.audit import AuditTrail
+from veritas.ingestion import _compute_content_hash
 
-def test_replay_deterministic(tmp_path, monkeypatch):
-    sig_log = tmp_path / "test_signals.jsonl"
-    audit_log = tmp_path / "audit_trail.json"
-    
-    # Mock config paths
-    import core.config
-    monkeypatch.setattr(core.config.CFG, "signals_log_path", sig_log)
-    monkeypatch.setattr(core.config.CFG, "base_dir", tmp_path)
-    
-    storage = Storage(sig_log, allowed_dir=tmp_path)
-    storage.append_signal({
+def _make_signal(**overrides):
+    """Helper: build a valid signal with a correct cryptographic_hash."""
+    base = {
         "signal_type": "device_fingerprint",
         "identity_claim": "user_conf",
         "source": "untrusted_source",
         "confidence_score": 0.5,
         "timestamp": "2024-01-01T10:00:00Z",
-        "cryptographic_hash": "a1"
-    })
+    }
+    base.update(overrides)
+    base["cryptographic_hash"] = _compute_content_hash(base)
+    return base
+
+def test_replay_deterministic(tmp_path, monkeypatch):
+    sig_log = tmp_path / "test_signals.jsonl"
+    audit_log = tmp_path / "audit_trail.json"
+    
+    import core.config
+    monkeypatch.setattr(core.config.CFG, "signals_log_path", sig_log)
+    monkeypatch.setattr(core.config.CFG, "base_dir", tmp_path)
+    
+    storage = Storage(sig_log, allowed_dir=tmp_path)
+    storage.append_signal(_make_signal())
     
     resolver = ConflictResolver(storage)
     resolutions = resolver.resolve_conflicts()

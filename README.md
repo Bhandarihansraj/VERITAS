@@ -20,7 +20,8 @@ Phase 1: Ingestion & Integrity   →  Phase 2: Conflict Resolution   →  Phase 
 ### Phase 1 — Multi-Source Attack Signal Ingestion
 - Accepts signals from three modalities: `video_stream`, `behavioral_log`, `device_fingerprint`
 - Each signal validated against strict schema: `signal_type`, `identity_claim`, `source`, `confidence_score`, `timestamp`, `cryptographic_hash`
-- SHA-256 hash-based deduplication rejects replayed or duplicated signals
+- **SHA-256 content integrity verification**: the provided `cryptographic_hash` must be the SHA-256 of the signal's content (all fields except the hash itself, canonical JSON). Mismatches are rejected as integrity failures.
+- Hash-based deduplication rejects replayed or duplicated signals (same hash = already seen)
 - Out-of-order timestamps accepted and re-slotted into correct chronological position
 - Append-only JSONL storage (`signals_log.jsonl`)
 - HTTP endpoint: `POST /attack_signals` → `200 OK` | `409 Conflict` | `400 Bad Request`
@@ -33,6 +34,7 @@ Phase 1: Ingestion & Integrity   →  Phase 2: Conflict Resolution   →  Phase 
   2. If tied → **higher source reliability wins** (configurable via `veritas/config/source_reliability.json`)
   3. If still tied → **latest `timestamp` wins**
 - Outputs one resolved identity state per claim, recording exactly *which tier decided*
+- When only one signal exists for a claim (no conflict), the strategy is recorded as `single_claim`
 
 ### Phase 3 — Immutable Audit Trail & Replay
 - Every resolved identity packaged into a cryptographically chained audit record:

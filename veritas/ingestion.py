@@ -1,4 +1,5 @@
 import json
+import hashlib
 from datetime import datetime
 from typing import Dict, Any, List
 
@@ -19,6 +20,12 @@ REQUIRED_FIELDS = {
 }
 
 VALID_SIGNAL_TYPES = {"video_stream", "behavioral_log", "device_fingerprint"}
+
+def _compute_content_hash(payload: Dict[str, Any]) -> str:
+    """Compute SHA-256 of the signal content (all fields except cryptographic_hash)."""
+    content = {k: v for k, v in payload.items() if k != "cryptographic_hash"}
+    canonical = json.dumps(content, sort_keys=True, separators=(',', ':'))
+    return hashlib.sha256(canonical.encode('utf-8')).hexdigest()
 
 class IngestionEngine:
     """Core logic for signal validation, dedup, and timeline management."""
@@ -57,15 +64,20 @@ class IngestionEngine:
         if not provided_hash or not isinstance(provided_hash, str) or len(provided_hash) != 64:
             raise ValidationError("Missing or invalid cryptographic_hash", code=400)
             
-        # 2. Hash-based replay/duplicate detection
+        # 2. Cryptographic integrity verification — SHA-256 of content must match provided hash
+        expected_hash = _compute_content_hash(payload)
+        if provided_hash != expected_hash:
+            raise IntegrityError(
+                f"Cryptographic integrity failure: provided hash does not match signal content "
+                f"(expected {expected_hash[:16]}..., got {provided_hash[:16]}...)",
+                code=400
+            )
+
+        # 3. Hash-based replay/duplicate detection
         if provided_hash in self.seen_hashes:
             raise DuplicateSignalError(f"Duplicate signal detected with hash: {provided_hash}", code=409)
-            
-        # Optional: verify hash matches the content, but for the sample files we will just trust the payload hash 
-        # format unless it's strictly a checksum of the other fields. The PRD says "detect replayed signals using cryptographic hash comparison",
-        # so simply deduplicating by hash fulfills the MVP requirement.
 
-        # 3. Storage
+        # 4. Storage
         self.seen_hashes.add(provided_hash)
         self.storage.append_signal(payload)
         log.info(f"Ingested signal: {payload['identity_claim']} ({provided_hash[:8]}...)")
