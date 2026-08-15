@@ -49,7 +49,7 @@ class ConflictResolver:
                     "resolved_signal": claims[0],
                     "conflicting_signals": [],
                     "resolution_strategy": "single_claim",
-                    "resolved_at": datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
+                    "resolved_at": claims[0].get("timestamp", "")
                 })
                 continue
                 
@@ -81,7 +81,7 @@ class ConflictResolver:
                 "resolved_signal": winner,
                 "conflicting_signals": losers,
                 "resolution_strategy": strategy,
-                "resolved_at": datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
+                "resolved_at": winner.get("timestamp", "")
             })
             
         return results

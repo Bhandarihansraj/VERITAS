@@ -48,10 +48,30 @@ class VeritasHandler(BaseHTTPRequestHandler):
         elif parsed.path == '/resolutions':
             try:
                 resolutions = self.server.resolver.resolve_conflicts()
+                # Auto-generate audit trail on resolution for Phase 3
+                from veritas.audit import AuditTrail
+                trail = AuditTrail(CFG.base_dir / "audit_trail.json")
+                trail.rebuild_from_resolutions(resolutions)
+                
                 self._send_response(200, {"resolutions": resolutions})
             except Exception as e:
                 log.error(f"Resolution error: {e}")
                 self._send_response(500, {"error": "Resolution error"})
+        elif parsed.path == '/audit':
+            try:
+                from veritas.audit import AuditTrail
+                trail = AuditTrail(CFG.base_dir / "audit_trail.json")
+                records = trail.load_records()
+                self._send_response(200, {"audit_trail": records})
+            except Exception as e:
+                self._send_response(500, {"error": str(e)})
+        elif parsed.path == '/replay':
+            try:
+                import replay
+                success = replay.run_replay()
+                self._send_response(200, {"success": success})
+            except Exception as e:
+                self._send_response(500, {"error": str(e)})
         else:
             self.send_response(404)
             self.end_headers()

@@ -21,6 +21,20 @@ def cmd_resolve(args):
     resolutions = resolver.resolve_conflicts()
     print(json.dumps(resolutions, indent=2))
 
+def cmd_replay(args):
+    import replay
+    success = replay.run_replay()
+    sys.exit(0 if success else 1)
+
+def cmd_verify(args):
+    from veritas.audit import verify_chain
+    from core.config import CFG
+    import json
+    audit_path = CFG.base_dir / "audit_trail.json"
+    success, proof = verify_chain(audit_path)
+    print(json.dumps(proof, indent=2))
+    sys.exit(0 if success else 1)
+
 def cmd_simulate(args):
     base_dir = Path(__file__).parent
     samples_dir = base_dir / "samples"
@@ -45,6 +59,9 @@ def cmd_simulate(args):
     ]
 
     for filename, desc in payloads:
+        if args.scenario and args.scenario not in filename:
+            continue
+            
         path = samples_dir / filename
         if not path.exists():
             log.warning(f"Sample {filename} not found, skipping.")
@@ -76,8 +93,11 @@ def main():
     
     parser_simulate = subparsers.add_parser("simulate", help="Send test payloads")
     parser_simulate.add_argument("--port", type=int, default=8585)
+    parser_simulate.add_argument("--scenario", type=str, help="Specific scenario to run")
     
     parser_resolve = subparsers.add_parser("resolve", help="Run deterministic conflict resolution")
+    parser_replay = subparsers.add_parser("replay", help="Run the deterministic replay engine")
+    parser_verify = subparsers.add_parser("verify", help="Verify the cryptographic audit chain")
     
     args = parser.parse_args()
     
@@ -87,6 +107,10 @@ def main():
         cmd_simulate(args)
     elif args.command == "resolve":
         cmd_resolve(args)
+    elif args.command == "replay":
+        cmd_replay(args)
+    elif args.command == "verify":
+        cmd_verify(args)
 
 if __name__ == "__main__":
     main()

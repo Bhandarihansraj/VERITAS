@@ -39,12 +39,45 @@
         </div>
     </div>
     
-    <div class="panel" style="max-height: none;">
+    <div class="panel" style="max-height: none; margin-bottom: 20px;">
         <h2>Conflicts & Resolutions</h2>
         <div id="resolutions"></div>
     </div>
+    
+    <div class="container" style="margin-bottom: 20px;">
+        <div class="panel">
+            <h2>Audit Trail</h2>
+            <div id="audit" style="font-family: monospace; font-size: 12px;"></div>
+        </div>
+        <div class="panel">
+            <h2>Replay Verification</h2>
+            <button onclick="runReplay()" style="padding: 10px; background: #007bff; color: white; border: none; cursor: pointer; border-radius: 4px;">Run Deterministic Replay</button>
+            <div id="replay-result" style="margin-top: 15px; font-weight: bold; font-family: monospace;"></div>
+        </div>
+    </div>
 
     <script>
+        async function runReplay() {
+            const resDiv = document.getElementById('replay-result');
+            resDiv.innerText = "Running deterministic replay engine...";
+            resDiv.style.color = "#aaa";
+            
+            try {
+                const res = await fetch('http://127.0.0.1:8585/replay', { method: 'POST' });
+                const data = await res.json();
+                
+                if(data.success) {
+                    resDiv.innerText = "PASS: 100% Deterministic Match. History is untampered.";
+                    resDiv.style.color = "#0f0";
+                } else {
+                    resDiv.innerText = "FAIL: History tampered or deterministic replay diverged!";
+                    resDiv.style.color = "#f00";
+                }
+            } catch(e) {
+                resDiv.innerText = "Error running replay: " + e;
+                resDiv.style.color = "#f00";
+            }
+        }
         async function poll() {
             try {
                 const res = await fetch('http://127.0.0.1:8585/timeline');
@@ -133,6 +166,27 @@
                     }
                     el.innerHTML = content;
                     resDiv.appendChild(el);
+                });
+                
+                // Fetch audit trail
+                const resAudit = await fetch('http://127.0.0.1:8585/audit');
+                const dataAudit = await resAudit.json();
+                
+                const auditDiv = document.getElementById('audit');
+                auditDiv.innerHTML = '';
+                
+                dataAudit.audit_trail.forEach(rec => {
+                    const el = document.createElement('div');
+                    el.style.borderLeft = '2px solid #555';
+                    el.style.paddingLeft = '10px';
+                    el.style.marginBottom = '10px';
+                    
+                    let content = `<strong>ID:</strong> ${rec.resolved_identity.identity_claim}<br>`;
+                    content += `<strong>Prev:</strong> <span style="color:#aaa;">${rec.prev_hash.substring(0, 16)}...</span><br>`;
+                    content += `<strong>Hash:</strong> <span style="color:#0f0;">${rec.audit_hash.substring(0, 16)}...</span>`;
+                    
+                    el.innerHTML = content;
+                    auditDiv.appendChild(el);
                 });
                 
             } catch(e) {
