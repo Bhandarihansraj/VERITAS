@@ -1,0 +1,8 @@
+{
+  "signal_type": "device_fingerprint",
+  "identity_claim": "user_123",
+  "source": "browser_agent",
+  "confidence_score": 0.99,
+  "timestamp": "2023-12-31T23:59:59Z",
+  "cryptographic_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

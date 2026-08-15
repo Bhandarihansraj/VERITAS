@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>VERITAS SOC Dashboard</title>
+    <style>
+        body { font-family: 'Courier New', monospace; background: #0a0a0a; color: #00ff00; margin: 0; padding: 20px; }
+        .container { display: flex; gap: 20px; }
+        .panel { border: 1px solid #333; padding: 15px; background: #111; flex: 1; border-radius: 4px; overflow-y: auto; max-height: 80vh;}
+        h1, h2 { border-bottom: 1px solid #333; padding-bottom: 5px; color: #fff; }
+        .stats { display: flex; gap: 20px; margin-bottom: 20px; }
+        .stat-box { border: 1px solid #333; padding: 10px; flex: 1; text-align: center; background: #1a1a1a;}
+        .stat-value { font-size: 24px; font-weight: bold; margin-top: 5px; }
+        
+        .signal { margin-bottom: 10px; padding: 10px; border-left: 4px solid; background: #151515;}
+        .sig-accepted { border-color: #00ff00; }
+        .sig-rejected { border-color: #ff0000; }
+        
+        .timeline-item { padding: 5px; border-bottom: 1px solid #222; font-size: 14px;}
+    </style>
+</head>
+<body>
+    <h1>VERITAS Ingestion & Integrity Layer</h1>
+    
+    <div class="stats" id="stats">
+        <div class="stat-box">Total Ingested<div class="stat-value" id="stat-ingested">0</div></div>
+        <div class="stat-box">Duplicates Rejected<div class="stat-value" id="stat-duplicates">0</div></div>
+        <div class="stat-box">Malformed Rejected<div class="stat-value" id="stat-malformed">0</div></div>
+        <div class="stat-box">Out-of-order Corrected<div class="stat-value" id="stat-ooo">0</div></div>
+    </div>
+    
+    <div class="container" style="margin-bottom: 20px;">
+        <div class="panel">
+            <h2>Live Signal Feed</h2>
+            <div id="feed"></div>
+        </div>
+        <div class="panel">
+            <h2>Chronological Timeline Strip</h2>
+            <div id="timeline"></div>
+        </div>
+    </div>
+    
+    <div class="panel" style="max-height: none;">
+        <h2>Conflicts & Resolutions</h2>
+        <div id="resolutions"></div>
+    </div>
+
+    <script>
+        async function poll() {
+            try {
+                const res = await fetch('http://127.0.0.1:8585/timeline');
+                const data = await res.json();
+                
+                document.getElementById('stat-ingested').innerText = data.stats.ingested;
+                document.getElementById('stat-duplicates').innerText = data.stats.duplicates;
+                document.getElementById('stat-malformed').innerText = data.stats.malformed;
+                
+                // Render feed
+                const feedDiv = document.getElementById('feed');
+                feedDiv.innerHTML = '';
+                data.feed.forEach(f => {
+                    const el = document.createElement('div');
+                    let cls = 'sig-accepted';
+                    let icon = '✅';
+                    let reasonText = f.reason || 'Verified & New';
+                    if (f.status === 'rejected') {
+                        cls = 'sig-rejected';
+                        icon = '❌';
+                    }
+                    
+                    el.className = 'signal ' + cls;
+                    let p = f.payload || {};
+                    let cid = p.identity_claim || 'unknown';
+                    let type = p.signal_type || 'unknown';
+                    el.innerHTML = `<strong>${icon} [${type}]</strong> Claim: ${cid} <br>
+                                    <small style="color:#aaa">Reason: ${reasonText}</small>`;
+                    feedDiv.appendChild(el);
+                });
+                
+                // Render Timeline
+                const tlDiv = document.getElementById('timeline');
+                tlDiv.innerHTML = '';
+                
+                let prevTime = 0;
+                let currentOooCount = 0;
+                
+                data.timeline.forEach(sig => {
+                    const el = document.createElement('div');
+                    el.className = 'timeline-item';
+                    let t = new Date(sig.timestamp).getTime();
+                    let marker = '';
+                    if (t < prevTime) {
+                        currentOooCount++;
+                        marker = '<span style="color:#ffaa00">[OOO Slotted]</span>';
+                    }
+                    if (t > prevTime) prevTime = t;
+                    
+                    el.innerHTML = `${sig.timestamp} | Claim: ${sig.identity_claim} | ${sig.signal_type} ${marker}`;
+                    tlDiv.appendChild(el);
+                });
+                
+                document.getElementById('stat-ooo').innerText = currentOooCount;
+                
+                // Fetch and render resolutions
+                const resResolutions = await fetch('http://127.0.0.1:8585/resolutions');
+                const dataResolutions = await resResolutions.json();
+                
+                const resDiv = document.getElementById('resolutions');
+                resDiv.innerHTML = '';
+                
+                dataResolutions.resolutions.forEach(r => {
+                    const el = document.createElement('div');
+                    el.style.border = '1px solid #333';
+                    el.style.padding = '10px';
+                    el.style.marginBottom = '15px';
+                    el.style.background = '#151515';
+                    
+                    let badgeColor = '#00aa00';
+                    if(r.resolution_strategy === 'source_reliability') badgeColor = '#0055ff';
+                    if(r.resolution_strategy === 'timestamp') badgeColor = '#ffaa00';
+                    if(r.resolution_strategy === 'single_claim') badgeColor = '#555';
+                    
+                    let strategyBadge = `<span style="background:${badgeColor}; color:#fff; padding: 3px 6px; border-radius:3px; font-size:12px;">${r.resolution_strategy}</span>`;
+                    
+                    let content = `<h3>Identity: ${r.identity_claim}</h3>`;
+                    content += `<strong>Winner:</strong> <pre style="color:#0f0; background:#000; padding:5px;">${JSON.stringify(r.resolved_signal, null, 2)}</pre>`;
+                    content += `<strong>Resolved by:</strong> ${strategyBadge}<br><br>`;
+                    
+                    if(r.conflicting_signals.length > 0) {
+                        content += `<strong>Conflicting Signals (Losers):</strong>`;
+                        r.conflicting_signals.forEach(loser => {
+                            content += `<pre style="color:#f55; background:#000; padding:5px; margin-top:5px;">${JSON.stringify(loser, null, 2)}</pre>`;
+                        });
+                    }
+                    el.innerHTML = content;
+                    resDiv.appendChild(el);
+                });
+                
+            } catch(e) {
+                console.error("Polling error", e);
+            }
+            setTimeout(poll, 1000);
+        }
+        poll();
+    </script>
+</body>
+</html>

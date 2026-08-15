@@ -1,0 +1,7 @@
+{
+  "signal_type": "behavioral_log",
+  "identity_claim": "user_456",
+  "source": "keystroke_monitor",
+  "confidence_score": 0.80,
+  "timestamp": "2024-01-01T12:01:00Z"
+}

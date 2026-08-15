@@ -1,0 +1,9 @@
+{
+  "signal_type": "device_fingerprint",
+  "identity_claim": "user_src",
+  "source": "untrusted_source",
+  "confidence_score": 0.9,
+  "timestamp": "2024-01-01T10:00:00Z",
+  "cryptographic_hash": "b100000000000000000000000000000000000000000000000000000000000000",
+  "fingerprint_value": "fp1"
+}
