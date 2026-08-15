@@ -3,8 +3,10 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# Data and logs (we don't want to commit the actual ingestion state)
+# Data and logs (runtime-generated — not committed)
 signals_log.jsonl
+audit_trail.json
+chain_proof.json
 *.log
 
 # Environments
